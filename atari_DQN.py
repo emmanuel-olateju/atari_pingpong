@@ -11,10 +11,10 @@ import torch
 
 random.seed(42)
 np.random.seed(42)
-# torch.manual_seed(42)
+torch.manual_seed(42)
 
 from atari_class_functions import Agent,DQNAgent
-from atari_DQNs import mlp_1_0
+from atari_DQNs import *
 
 # Initialize pygame
 pygame.init()
@@ -40,7 +40,7 @@ ball_speed_x = 7
 ball_speed_y = 7
 
 # Initialize agent
-training_dir = "training_sessions/DQN/"
+training_dir = "DQN_training_sessions/"
 pretrained_agent = input('path to pretrained_agent:')
 pretrained_agent = training_dir+pretrained_agent
 if os.path.exists(pretrained_agent):
@@ -48,14 +48,18 @@ if os.path.exists(pretrained_agent):
     time.sleep(2)
     paddle1_agent = joblib.load(pretrained_agent)
     paddle1_agent.update_agent(paddle1)
+    paddle1_agent.misses = 0
 elif pretrained_agent.strip():
     print("New Agent being spawned")
     paddle1_agent = DQNAgent(
         paddle1,
         environment={'HEIGHT': HEIGHT, 'WIDTH': WIDTH, 'ball': ball},
-        learning_rate=1E-6,
-        gamma=0.9,
-        neural_net = copy.deepcopy(mlp_1_0),
+        learning_rate=0.01,
+        gamma=0.1,
+        epsilon=0.3,
+        eps_decay_steps=2000000,
+        eps_range=(0.3,1),
+        neural_net = mlp_1_2(),
         Q_file=pretrained_agent
     )
 else:
@@ -71,11 +75,11 @@ font = pygame.font.Font(None, 36)
 steps = 0
 steps_per_sample = 1
 cycle = 1
+episode = 1
+action_choice = random.randint(0,2)
 
 # Main game loop
 while True:
-    steps += 1
-    action_choice = None
 
     # Handle events
     for event in pygame.event.get():
@@ -83,13 +87,39 @@ while True:
             paddle1_agent.save()
             pygame.quit()
             sys.exit()
+            
+    paddle1_agent.observe(ball_velocity=[ball_speed_x, ball_speed_y])
+    # if paddle1_agent.prev_state!=paddle1_agent.state:
+    Q_ns, Q_ns_t, hit_ratio = paddle1_agent.compute_targets(score1, cycle, action_choice)
+    paddle1_agent.batch.append((Q_ns,Q_ns_t))
+    steps = 0
 
-    # Move paddles
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_UP] and paddle2.top > 0:
-        paddle2.y -= 10
-    if keys[pygame.K_DOWN] and paddle2.bottom < HEIGHT:
-        paddle2.y += 10
+    if cycle>episode:
+        tensor = torch.tensor(paddle1_agent.batch)
+        # if tensor.ndim==2:
+        loss = paddle1_agent.train((tensor[:,0,:],tensor[:,1,:]))
+        print(f"{cycle} -> performance: {hit_ratio:.2f} | loss: {loss:.2f} | epsilon: {paddle1_agent.__epsilon__:.2f}")
+        paddle1_agent.batch = []
+        episode=cycle
+
+    action_choice = paddle1_agent.act()
+    steps += 1
+
+    if paddle2.top>ball.top:
+            if paddle2.top > 0:
+                paddle2.y -= 10
+    elif paddle2.bottom<ball.bottom:
+        if paddle2.bottom < HEIGHT:
+            paddle2.y += 10
+    else:
+        if abs(ball.right-paddle2.left)<=2 or abs(ball.top-paddle2.top)<=2 or abs(ball.bottom-paddle2.bottom<=2):
+            dir = random.randint(0,1)
+            if dir==0:
+                if paddle2.top > 0:
+                    paddle2.y -= 10
+            else:
+                if paddle2.bottom < HEIGHT:
+                    paddle2.y += 10
 
     # Move ball
     ball.x += ball_speed_x
@@ -98,15 +128,11 @@ while True:
     # Ball collision with paddles
     if ball.colliderect(paddle1) or ball.colliderect(paddle2):
         ball_speed_x *= -1
-    
-    if ball.colliderect(paddle1):
-        score1 += 1
-        cycle += 1
 
     # Ball collision with walls
     if ball.top <= 0 or ball.bottom >= HEIGHT:
         ball_speed_y *= -1
-
+    
     # Ball out of bounds
     if ball.left <= 5:
         score1 -= 1
@@ -116,17 +142,10 @@ while True:
         cycle += 1
     if ball.right >= WIDTH:
         ball_speed_x *= -1
-
-    if len(paddle1_agent.batch)==178:
-        paddle1_agent.train(float(score1/cycle))
-        paddle1_agent.batch = []
-
-    if steps == steps_per_sample:
-        action_choice = paddle1_agent.act(ball_velocity=[ball_speed_x, ball_speed_y])
-        paddle1_agent.observe(ball_velocity=[ball_speed_x, ball_speed_y])
-        Q_ns, Q_ns_t = paddle1_agent.compute_targets(score1, (score1 / cycle), action_choice)
-        steps = 0
-        paddle1_agent.train((Q_ns,Q_ns_t))
+    # Ball paddle Hit
+    if ball.colliderect(paddle1):
+        score1 += 1
+        cycle += 1
 
     # Clear the screen
     screen.fill(BLACK)
@@ -137,11 +156,10 @@ while True:
     pygame.draw.ellipse(screen, WHITE, ball)
 
     # Display scores
-    score_text = font.render(f"{score1}/{cycle}={score1/cycle}", True, WHITE)
+    score_text = font.render(f"Performance: {hit_ratio:.2f}", True, WHITE)
     screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, 20))
 
-    # print(cycle,abs(ball_speed_x),abs(ball_speed_y))
-    if cycle == 100:
+    if cycle == 1000:
         paddle1_agent.save()
         pygame.quit()
         exit()
@@ -150,6 +168,6 @@ while True:
     pygame.display.flip()
 
     # Cap the frame rate
-    clock.tick(60)
+    clock.tick(1000)
 
   

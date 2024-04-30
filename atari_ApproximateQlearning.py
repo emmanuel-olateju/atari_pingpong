@@ -50,9 +50,11 @@ elif pretrained_agent.strip():
         environment_params={'HEIGHT': HEIGHT, 'WIDTH': WIDTH, 'ball': ball},
         epsilon=0.3,
         alpha=0.3,
-        gamma=0.1,
+        gamma=0.2,
+        eps_decay_steps=2000000,
+        eps_range=(0.3,1),
         Q_file=pretrained_agent,
-        pos_th=(2,1),
+        pos_th=(4,4),
         noLossReward=0.7
     )
 else:
@@ -81,12 +83,22 @@ while True:
             pygame.quit()
             sys.exit()
 
-    # Move paddles
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_UP] and paddle2.top > 0:
-        paddle2.y -= 10
-    if keys[pygame.K_DOWN] and paddle2.bottom < HEIGHT:
-        paddle2.y += 10
+    #Move Paddle2 with ball
+    if paddle2.top>ball.top:
+        if paddle2.top > 0:
+            paddle2.y -= 10
+    elif paddle2.bottom<ball.bottom:
+        if paddle2.bottom < HEIGHT:
+            paddle2.y += 10
+    else:
+        if abs(ball.right-paddle2.left)<=2 or abs(ball.top-paddle2.top)<=2 or abs(ball.bottom-paddle2.bottom<=2):
+            dir = random.randint(0,1)
+            if dir==0:
+                if paddle2.top > 0:
+                    paddle2.y -= 10
+            else:
+                if paddle2.bottom < HEIGHT:
+                    paddle2.y += 10
 
     # Move ball
     ball.x += ball_speed_x
@@ -118,7 +130,7 @@ while True:
         action_choice = paddle1_agent.epsilon_greedy_selection()
         action_choice = paddle1_agent.take_action(action_choice)
         paddle1_agent.set_state(ball_velocity=[ball_speed_x, ball_speed_y])
-        paddle1_agent.update_Q_values(score1, (score1 / cycle), action_choice)
+        hit_ratio = paddle1_agent.update_Q_values(score1, cycle, action_choice)
         steps = 0
 
     # Clear the screen
@@ -130,11 +142,13 @@ while True:
     pygame.draw.ellipse(screen, WHITE, ball)
 
     # Display scores
-    score_text = font.render(f"{score1}/{cycle}={score1/cycle}", True, WHITE)
+    score_text = font.render(f"Performance: {hit_ratio:.2f}", True, WHITE)
     screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, 20))
 
-    print(cycle,abs(ball_speed_x),abs(ball_speed_y))
-    if cycle == 100:
+    print(f"{cycle} -> performance: {hit_ratio:.2f} | epsilon: {paddle1_agent.__epsilon__:.2f}")
+
+    # print(cycle,abs(ball_speed_x),abs(ball_speed_y))
+    if cycle == 1000:
         paddle1_agent.save()
         pygame.quit()
         exit()
@@ -143,6 +157,6 @@ while True:
     pygame.display.flip()
 
     # Cap the frame rate
-    clock.tick(60)
+    clock.tick(1000)
 
   
