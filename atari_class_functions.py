@@ -39,6 +39,7 @@ class Agent():
         self.__noLossReward__ = noLossReward
         self.history = {
             "score_per_cycle":[],
+            "epoch_performance":[],
             "reward":[],
             "epsilon":[],
             "alpha":[],
@@ -49,7 +50,7 @@ class Agent():
         self.eps_max = eps_range[1]
         
         self.Q_file=Q_file
-        self.Q = np.random.randn(len(self.__states__),len(self.__actions__))
+        self.Q = np.zeros((len(self.__states__),len(self.__actions__)))
         self.Q = softmax(self.Q)
         self.agent = agent
         self.prev_state = (self.__xb__,self.__yb__,self.__yp__,self.__bxv__,self.__byv__)
@@ -57,7 +58,11 @@ class Agent():
         self.environment = environment_params
         self.score = 0
         self.reward = 0
+        self.session_rewards = 0
         self.misses = 0
+    
+    def update_eps_decay_steps(self,steps):
+        self.eps_decay_steps = steps
 
     def check_states(self):
         return self.__states__
@@ -143,17 +148,14 @@ class Agent():
     def compute_reward(self,current_score,cycle):
         self.reward = current_score - self.score
         if self.reward==0:
-            if abs(self.__yb__-self.__yp__)<=1:
+            if abs(self.__yb__-self.__yp__)<=2:
                 self.reward = self.__noLossReward__
-                current_score += self.reward
+                # current_score += self.reward
         if self.reward==-1:
             self.misses += 1
         hit_ratio = (cycle-self.misses)/cycle
+        self.session_rewards += self.reward
         self.history['score_per_cycle'].append(hit_ratio)
-        self.history['reward'].append(self.reward)
-        self.history['epsilon'].append(self.__epsilon__)
-        self.history['alpha'].append(self.__alpha__)
-        self.history['gamma'].append(self.__gamma__)
         self.score = current_score
         return hit_ratio
 
@@ -192,23 +194,54 @@ class Agent():
 
 class DQNAgent(Agent):
 
-    def __init__(self,agent,environment,learning_rate=0.01,gamma=0.1,epsilon=0.3,eps_decay_steps=2000000,eps_range=(1E-6,1),neural_net=mlp_1_0,Q_file=' '):
-        super().__init__(agent,environment,noLossReward=0.7,epsilon=epsilon,alpha=0.3,gamma=gamma,Q_file=Q_file,eps_decay_steps=eps_decay_steps,\
+    def __init__(self,agent,environment,learning_rate=0.01,gamma=0.1,epsilon=0.3,eps_decay_steps=2000000,eps_range=(1E-6,1),neural_net=mlp_1_0,Q_file=' ',\
+                 training_epochs=7,batch_size=7,noLossReward_=1,replay_size=2000):
+        super().__init__(agent,environment,noLossReward=noLossReward_,epsilon=epsilon,alpha=0.3,gamma=gamma,Q_file=Q_file,eps_decay_steps=eps_decay_steps,\
                          eps_range=eps_range)
         self.lr = learning_rate
         self.gamma = gamma
-        self.DQN = neural_net
+        self.DQN = neural_net()
+        self.DQN_target = neural_net()
         self.optimizer = torch.optim.Adam(self.DQN.parameters(),lr=self.lr)
         self.loss = nn.MSELoss()
-        self.batch = []
+        self.training_epochs = training_epochs
+        self.batch_size = batch_size
+        self.replay_size = replay_size
+
+        self.states = []
+        self.next_states = []
+        self.actions = []
+        self.rewards = []
+        self.history['loss'] = []
+
+    def update_lr(self,lr):
+        self.lr = lr
+        self.optimizer = torch.optim.Adam(self.DQN.parameters(),lr=self.lr)
 
     def observe(self,ball_velocity):
-        self.set_state(ball_velocity=ball_velocity)
+        self.set_state_(ball_velocity=ball_velocity)
 
-    def dqn_select_action(self):
+    def set_state_(self,ball_velocity):
+        self.__yp__ = self.agent.top
+        self.__xb__ = self.environment['ball'].right
+        self.__yb__ = self.environment['ball'].top
+        self.__bxv__ = ball_velocity[0]
+        self.__byv__ = ball_velocity[1]
+
+        self.__xb__ = float(self.__xb__)
+        self.__yb__ = float(self.__yb__)
+        self.__yp__ = float(self.__yp__)
+        self.__bxv__ = float(self.__bxv__)
+        self.__byv__ = float(self.__byv__)
+        
+        # set state
+        self.prev_state = self.state
+        self.state =  (self.__xb__,self.__yb__,self.__yp__,self.__bxv__,self.__byv__)
+
+    def dqn_select_action(self,cycle,training_loop):
         eps_min = self.eps_min
         eps_max = self.eps_max
-        epsilon= max(eps_min, eps_max - (eps_max-eps_min) * len(self.history["reward"])/self.eps_decay_steps)
+        epsilon= max(eps_min, eps_max - (eps_max-eps_min) * training_loop/self.eps_decay_steps)
         self.__epsilon__ = epsilon
         n = random.random()
         if n <= self.__epsilon__:
@@ -219,41 +252,66 @@ class DQNAgent(Agent):
             action_choice = torch.argmax(Q_est)
         return action_choice
 
-    def act(self):
-        action_choice = self.dqn_select_action()
+    def act(self,cycle,training_loop):
+        action_choice = self.dqn_select_action(cycle,training_loop)
         action_choice = self.take_action(action_choice)
         return action_choice
     
-    def compute_targets(self,current_score,_cycle_,action_choice):
-        self.DQN = self.DQN.eval()
-        Q_ns = (self.DQN(self.prev_state)).detach().numpy().astype(float)
-        # Q_ns = Q_ns[action_choice]
+    def compute_targets(self,current_score,_cycle_):
         hit_ratio = self.compute_reward(current_score=current_score,cycle=_cycle_)
-        Q_est = self.DQN(self.state)
-        Q_est = Q_est.detach().numpy().astype(float)
-        psi = self.__states__.index(self.prev_state) # previous state index
-        nsi = self.__states__.index(self.state) #next/current state index
-        self.Q[psi,action_choice] = self.Q[psi,action_choice] + self.__alpha__*(self.reward+(self.__gamma__*max(self.Q[nsi,:]))-self.Q[psi,action_choice])
-        for i in [0,1,2]:
-            if i!=action_choice:
-                self.Q[psi,i] = 0
-        Q_ns_t = softmax(self.Q[psi,:])
-        # Q_ns_t = Q_ns + float(self.__alpha__*(self.reward + (self.__gamma__*(max(Q_est))) - Q_est[action_choice]))
-        return (Q_ns,Q_ns_t,hit_ratio)
+        return hit_ratio
+    
+    def update_target_network(self):
+        self.DQN_target.load_state_dict(self.DQN.state_dict())
     
     def train(self,Q):
-        self.DQN = self.DQN.train()
-        self.loss = nn.SmoothL1Loss()
+        states = torch.tensor(Q[0])
+        actions = torch.tensor(Q[1])
+        rewards = torch.tensor(Q[2])
+        next_states = torch.tensor(Q[3])
 
-        input = Q[0].requires_grad_(True)
-        target = Q[1].clone().detach()
-        print(input.size(),target.size())
-        loss = self.loss(input,target)
+        batch_loss = 0
+        no_epochs = self.training_epochs
+        epoch_size = self.batch_size
 
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+        for i in range(no_epochs):
 
-        self.DQN = self.DQN.eval()
+            indices = list(np.random.random_integers(0,states.size()[0]-1,epoch_size))
+            self.DQN = self.DQN.eval()
+            Q = self.DQN(states[indices, ::])
+            Qnsa = self.DQN_target(next_states[indices, ::])
+            Qt = (torch.max(Qnsa, dim=1))[0]
+            Qt = rewards[indices] + Qt
+            y = Qnsa.clone()
+            
+            for i in range(Q.size()[0]):
+                y[i,actions[i]] = Qt[i]
 
-        return loss
+
+            Q = Q.requires_grad_(True)
+
+            self.DQN = self.DQN.train()
+
+            loss = self.loss(Q,y)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            batch_loss += loss
+        return batch_loss/no_epochs
+
+
+
+
+        # input = Q[0].requires_grad_(True)
+        # target = Q[1].clone().detach()
+        # print(input.size(),target.size())
+        # loss = self.loss(input,target)
+
+        # self.optimizer.zero_grad()
+        # loss.backward()
+        # self.optimizer.step()
+
+        # self.DQN = self.DQN.eval()
+
+        # return loss
