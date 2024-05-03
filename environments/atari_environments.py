@@ -62,16 +62,6 @@ class pong_env:
     
     def step(self,action):
         prev_state = self.observe()
-        # Ball collision with walls
-        if self.ball.top <= 0 or self.ball.bottom >= self.HEIGHT:
-            self.BALL_SPEED_Y *= -1
-        # Ball out of bounds
-        if self.ball.right >= self.WIDTH:
-            self.BALL_SPEED_X *= -1
-        if self.ball.left <= 5:
-            self.ball.x = random.randint(0,int(self.WIDTH*0.85)) - self.BALL_SIZE // 2
-            self.ball.y = random.randint(0, self.HEIGHT) - self.BALL_SIZE // 2
-            self.BALL_SPEED_X *= -1
 
         assert action in self.__ACTION_SPACE__.keys()
         if self.__ACTION_SPACE__[action]=="up" and self.agent.top>(0.15*self.HEIGHT):
@@ -87,16 +77,31 @@ class pong_env:
         self.ball.x += self.BALL_SPEED_X
         self.ball.y += self.BALL_SPEED_Y
 
+        # Ball collision with walls
+        if self.ball.top <= 0 or self.ball.bottom >= self.HEIGHT:
+            self.BALL_SPEED_Y *= -1
+        # Ball out of bounds
+        if self.ball.right >= self.WIDTH:
+            self.BALL_SPEED_X *= -1
+        if self.ball.left <= 5:
+            self.ball.x = random.randint(0,int(self.WIDTH*0.85)) - self.BALL_SIZE // 2
+            self.ball.y = random.randint(0, self.HEIGHT) - self.BALL_SIZE // 2
+            self.BALL_SPEED_X *= -1
+
+        if self.ball.colliderect(self.agent):
+            self.BALL_SPEED_X *= -1
+
+        next_state = self.observe()
+
         # Compute Rewards
         if self.ball.left <= 5:
             reward = self.MISS_REWARD
         elif self.ball.colliderect(self.agent):
-            self.BALL_SPEED_X *= -1
             reward = self.HIT_REWARD
         else:
-            reward = self.PASSIVE_REWARD
+            diff = abs(next_state[1]-next_state[2])
+            reward = (self.HEIGHT -(diff/self.HEIGHT))*100
 
-        next_state = self.observe()
 
         self.steps += 1
 
