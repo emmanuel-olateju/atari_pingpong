@@ -10,11 +10,11 @@ import numpy as np
 import torch
 torch.set_default_dtype(torch.float64)
 
-seed = 100
+# seed = 100
 
 # random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
+# np.random.seed(seed)
+# torch.manual_seed(seed)
 
 # Initialize pygame
 pygame.init()
@@ -55,7 +55,7 @@ class pong_env:
         self.ball.left = self.ball.right - self.BALL_SIZE
         self.ball.top = random.randint(self.BALL_SIZE, self.HEIGHT)
         self.ball.bottom = self.ball.top + self.BALL_SIZE
-        self.agent.top = random.randint(0, self.HEIGHT-self.AGENT_HEIGHT)
+        self.agent.top = self.HEIGHT//2
         self.agent.bottom = self.agent.top + self.AGENT_HEIGHT
         self.BALL_SPEED_X = random.choice([-7,7])
         self.BALL_SPEED_Y = random.choice([-7,7])
