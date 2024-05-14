@@ -50,6 +50,7 @@ class pong_env:
     def reset(self):
         self.steps = 0
         self.hits = 0
+        self.cycles = 0
         self.ball.right = random.randint(5, self.WIDTH)
         self.ball.left = self.ball.right - self.BALL_SIZE
         self.ball.top = random.randint(self.BALL_SIZE, self.HEIGHT)
