@@ -40,6 +40,8 @@ class pong_env:
         self.PASSIVE_REWARD = PASSIVE_REWARD
 
         self.steps = 0
+        self.hits = 0
+        self.cycles = 0
 
     def __get_state__(self):
         return ((self.ball.right+self.ball.left)/2,(self.ball.top+self.ball.bottom)/2,(self.agent.top+self.agent.bottom)/2,
@@ -47,6 +49,7 @@ class pong_env:
     
     def reset(self):
         self.steps = 0
+        self.hits = 0
         self.ball.right = random.randint(5, self.WIDTH)
         self.ball.left = self.ball.right - self.BALL_SIZE
         self.ball.top = random.randint(self.BALL_SIZE, self.HEIGHT)
@@ -56,6 +59,12 @@ class pong_env:
         self.BALL_SPEED_X = random.choice([-7,7])
         self.BALL_SPEED_Y = random.choice([-7,7])
         return self.__get_state__()
+    
+    def get_hits(self):
+        return self.hits
+    
+    def get_cycles(self):
+        return self.cycles
     
     def observe(self):
         return self.__get_state__()
@@ -96,8 +105,11 @@ class pong_env:
         # Compute Rewards
         if self.ball.left <= 5:
             reward = self.MISS_REWARD
+            self.cycles += 1
         elif self.ball.colliderect(self.agent):
             reward = self.HIT_REWARD
+            self.hits += 1
+            self.cycles += 1
         else:
             diff = abs(next_state[1]-next_state[2])
             reward = (self.HEIGHT -(diff/self.HEIGHT))*0.001
