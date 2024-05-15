@@ -122,7 +122,7 @@ class pong_env:
             reward = self.HIT_REWARD
         else:
             diff = abs(next_state[1]-next_state[2])
-            reward = (self.HEIGHT -(diff/self.HEIGHT))*0.001
+            reward = (self.HEIGHT -(diff/self.HEIGHT))
             reward = self.PASSIVE_REWARD + reward
 
         self.steps += 1
