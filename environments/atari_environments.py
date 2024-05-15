@@ -78,10 +78,10 @@ class pong_env:
         prev_state = self.observe()
 
         assert action in self.__ACTION_SPACE__.keys()
-        if self.__ACTION_SPACE__[action]=="up" and self.agent.top>(0.15*self.HEIGHT):
+        if self.__ACTION_SPACE__[action]=="up" and self.agent.top>(0.05*self.HEIGHT):
             self.agent.y-=15
             action_index = 0
-        elif self.__ACTION_SPACE__[action]=="down" and self.agent.bottom<(0.85*self.HEIGHT):
+        elif self.__ACTION_SPACE__[action]=="down" and self.agent.bottom<(0.95*self.HEIGHT):
             self.agent.y+=15
             action_index = 1
         else:
