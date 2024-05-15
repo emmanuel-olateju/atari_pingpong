@@ -78,10 +78,10 @@ class pong_env:
         prev_state = self.observe()
 
         assert action in self.__ACTION_SPACE__.keys()
-        if self.__ACTION_SPACE__[action]=="up" and self.agent.top>(0.05*self.HEIGHT):
+        if self.__ACTION_SPACE__[action]=="up" and self.agent.top>int(0.001*self.HEIGHT):
             self.agent.y-=15
             action_index = 0
-        elif self.__ACTION_SPACE__[action]=="down" and self.agent.bottom<(0.95*self.HEIGHT):
+        elif self.__ACTION_SPACE__[action]=="down" and self.agent.bottom<=int(0.999*self.HEIGHT):
             self.agent.y+=15
             action_index = 1
         else:
@@ -100,7 +100,7 @@ class pong_env:
             self.BALL_SPEED_X *= -1
 
         # Determine if HIT or MISS
-        if self.ball.left <= 5:
+        if self.ball.left <= 2:
             # ON MISS
             self.cycles += 1
             self.ball.x = random.randint(0,int(self.WIDTH*0.85)) - self.BALL_SIZE // 2
@@ -116,7 +116,7 @@ class pong_env:
         next_state = self.observe()
 
         # Compute Rewards
-        if self.ball.left <= 5:
+        if self.ball.left <= 2:
             reward = self.MISS_REWARD
         elif self.ball.colliderect(self.agent):
             reward = self.HIT_REWARD
