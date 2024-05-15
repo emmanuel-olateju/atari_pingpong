@@ -10,21 +10,22 @@ import numpy as np
 import torch
 torch.set_default_dtype(torch.float64)
 
-# seed = 100
-
-# random.seed(seed)
-# np.random.seed(seed)
-# torch.manual_seed(seed)
-
 # Initialize pygame
 pygame.init()
+
+# Constants
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+font = pygame.font.Font(None, 36)
 
 class pong_env:
 
     def __init__(self, HEIGHT, WIDTH, PADDLE_HEIGHT, PADDLE_WIDTH, BALL_SIZE, BALL_SPEED:tuple,\
-                 MISS_REWARD=-1,HIT_REWARD=10,PASSIVE_REWARD=1):
+                 MISS_REWARD=-1,HIT_REWARD=10,PASSIVE_REWARD=1,RENDER_MODE=False):
+        
         self.HEIGHT = HEIGHT
         self.WIDTH = WIDTH
+
         self.agent = pygame.Rect(0, HEIGHT // 2 - PADDLE_HEIGHT // 2, PADDLE_WIDTH, PADDLE_HEIGHT)
         self.AGENT_WIDTH = PADDLE_WIDTH
         self.AGENT_HEIGHT = PADDLE_HEIGHT
@@ -32,6 +33,9 @@ class pong_env:
         self.BALL_SIZE = BALL_SIZE
         self.BALL_SPEED_X = BALL_SPEED[0]
         self.BALL_SPEED_Y = BALL_SPEED[1]
+        
+        self.RENDER_MODE = RENDER_MODE
+        self.init_render()
 
         self.__ACTION_SPACE__= {0:"up",1:"down",2:"stay"}
 
@@ -87,37 +91,70 @@ class pong_env:
         self.ball.x += self.BALL_SPEED_X
         self.ball.y += self.BALL_SPEED_Y
 
-        # Ball collision with walls
+        # Ball collision with top/bottom walls
         if self.ball.top <= 0 or self.ball.bottom >= self.HEIGHT:
             self.BALL_SPEED_Y *= -1
+
         # Ball out of bounds
         if self.ball.right >= self.WIDTH:
             self.BALL_SPEED_X *= -1
+
+        # Determine if HIT or MISS
         if self.ball.left <= 5:
+            # ON MISS
+            self.cycles += 1
             self.ball.x = random.randint(0,int(self.WIDTH*0.85)) - self.BALL_SIZE // 2
             self.ball.y = random.randint(0, self.HEIGHT) - self.BALL_SIZE // 2
             self.BALL_SPEED_X *= -1
-
-        if self.ball.colliderect(self.agent):
+        elif self.ball.colliderect(self.agent):
+            # ON HIT
+            self.hits += 1
+            self.cycles += 1
             self.BALL_SPEED_X *= -1
+            
 
         next_state = self.observe()
 
         # Compute Rewards
         if self.ball.left <= 5:
             reward = self.MISS_REWARD
-            self.cycles += 1
         elif self.ball.colliderect(self.agent):
             reward = self.HIT_REWARD
-            self.hits += 1
-            self.cycles += 1
         else:
             diff = abs(next_state[1]-next_state[2])
             reward = (self.HEIGHT -(diff/self.HEIGHT))*0.001
             reward = self.PASSIVE_REWARD + reward
 
-
-
         self.steps += 1
 
         return prev_state, action_index, next_state, reward
+    
+    def init_render(self):
+        if self.RENDER_MODE:
+            pygame.init()
+            self.RENDER_MODE = True
+            self.screen = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
+            self.clock = pygame.time.Clock()
+            pygame.display.set_caption("Atari Ping Pong")
+        else:
+            pass
+
+    def render(self):
+        if self.RENDER_MODE==False:
+            self.RENDER_MODE = True
+            self.init_render()
+
+        # Clear the screen
+        self.screen.fill(BLACK)
+
+        # Draw paddles and ball
+        pygame.draw.rect(self.screen, WHITE, self.agent)
+        pygame.draw.ellipse(self.screen, WHITE, self.ball)
+
+        # Display scores
+        if self.cycles>=1:
+            score_text = font.render(f"Performance: {self.hits}/{self.cycles}={self.hits/self.cycles:.2f}", True, WHITE)
+            self.screen.blit(score_text, (self.WIDTH // 2 - score_text.get_width() // 2, 20))
+
+        # Update the display
+        pygame.display.flip()
