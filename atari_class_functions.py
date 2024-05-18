@@ -20,6 +20,63 @@ def softmax(x):
     e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
     return e_x / e_x.sum(axis=-1, keepdims=True)
 
+def aqn_set_state(environment):
+    # set __yp__ (y position of paddle)
+    if environment.agent.top>=0 and environment.agent.top<(environment.HEIGHT//5):
+        __yp__ = 0
+    elif environment.agent.top<=(2*(environment.HEIGHT//5)):
+        __yp__ = 1
+    elif environment.agent.top<=(3*(environment.HEIGHT//5)):
+        __yp__ = 2
+    elif environment.agent.top<=(4*(environment.HEIGHT//5)):
+        __yp__ = 3
+    else:
+        __yp__ = 4
+
+    # set __xb__ (x position of ball)
+    if environment.ball.right>=0 and environment.ball.right<(environment.WIDTH//5):
+        __xb__ = 0
+    elif environment.ball.right<=(2*(environment.WIDTH//5)):
+        __xb__ = 1
+    elif environment.ball.right<=(3*(environment.WIDTH//5)):
+        __xb__ = 2
+    elif environment.ball.right<=(4*(environment.WIDTH//5)):
+        __xb__ = 3
+    else:
+        __xb__ = 4
+
+    # set __yb__ (y position of the ball)
+    if environment.ball.top>=0 and environment.ball.top<(environment.HEIGHT//5):
+        __yb__ = 0
+    elif environment.ball.top<=(2*(environment.HEIGHT//5)):
+        __yb__ = 1
+    elif environment.ball.top<=(3*(environment.HEIGHT//5)):
+        __yb__ = 2
+    elif environment.ball.top<=(4*(environment.HEIGHT//5)):
+        __yb__ = 3
+    else:
+        __yb__ = 4
+
+    # set __bxv__ (x velocity of ball)
+    if environment.BALL_SPEED_X>0:
+        __bxv__ = 1
+    else:
+        __bxv__ = 0
+
+    # set __byv__ (y velocity of ball)
+    if environment.BALL_SPEED_Y>0:
+        __byv__ = 1
+    else:
+        __byv__ = 0
+
+    __xb__ = float(__xb__)
+    __yb__ = float(__yb__)
+    __yp__ = float(__yp__)
+    __bxv__ = float(__bxv__)
+    __byv__ = float(__byv__)
+
+    return (__xb__, __yb__, __yp__, __bxv__, __byv__)
+
 class Agent():
     def __init__(self, agent, environment_params,epsilon=0.1,alpha=0.1,gamma=0.1,Q_file=' ',pos_th=(1,1),noLossReward=0.7,\
                  eps_decay_steps=2000000,eps_range=(1E-6,1)):
