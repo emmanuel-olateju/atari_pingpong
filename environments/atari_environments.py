@@ -77,6 +77,7 @@ class pong_env:
     def step(self,action):
         prev_state = self.observe()
 
+        # AGENT TAKE ACTION
         assert action in self.__ACTION_SPACE__.keys()
         if self.__ACTION_SPACE__[action]=="up" and self.agent.top>int(0.001*self.HEIGHT):
             self.agent.y-=15
@@ -84,45 +85,43 @@ class pong_env:
         elif self.__ACTION_SPACE__[action]=="down" and self.agent.bottom<=int(0.999*self.HEIGHT):
             self.agent.y+=15
             action_index = 1
-        else:
+        elif self.__ACTION_SPACE__[action]=="stay":
             action_index = 2
+        else:
+            action_index = random.randint(0,len(self.__ACTION_SPACE__)-1)
 
-        # Move ball
+        # STEP BALL
         self.ball.x += self.BALL_SPEED_X
         self.ball.y += self.BALL_SPEED_Y
 
-        # Ball collision with top/bottom walls
-        if self.ball.top <= 0 or self.ball.bottom >= self.HEIGHT:
-            self.BALL_SPEED_Y *= -1
-
-        # Ball out of bounds
-        if self.ball.right >= self.WIDTH:
-            self.BALL_SPEED_X *= -1
-
-        # Determine if HIT or MISS and compute reward
-        if self.ball.left <= 2:
-            # ON MISS
-            self.ball.x = random.randint(0,int(self.WIDTH*0.85)) - self.BALL_SIZE // 2
-            self.ball.y = random.randint(0, self.HEIGHT) - self.BALL_SIZE // 2
-            self.BALL_SPEED_X *= -1
-            self.cycles += 1
-            reward = self.MISS_REWARD
-        elif self.ball.colliderect(self.agent):
-            # ON HIT
-            self.BALL_SPEED_X *= -1
+        # Observe Reward
+        if self.ball.colliderect(self.agent):
             self.cycles += 1
             self.hits += 1
             reward = self.HIT_REWARD
-
-        next_state = self.observe()
-
-        if self.ball.left > 2 and ~self.ball.colliderect(self.agent):
-            diff = abs(next_state[1]-next_state[2])
+        elif self.ball.left <= 0:
+            self.cycles += 1
+            reward = self.MISS_REWARD
+        else:
+            state = self.observe()
+            diff = abs(state[1]-state[2])
             reward = (self.HEIGHT -(diff/self.HEIGHT))*0.01
             reward = self.PASSIVE_REWARD + reward
 
-        self.steps += 1
+        ## HANDLE COLLISIONS
 
+        # IF Ball collision with top/bottom walls
+        if self.ball.top <= 0 or self.ball.bottom >= self.HEIGHT:
+            self.BALL_SPEED_Y *= -1
+
+        # IF Ball out of bounds
+        if (self.ball.right >= self.WIDTH) or (self.ball.left <= 0):
+            self.BALL_SPEED_X *= -1
+        elif self.ball.colliderect(self.agent):
+            # IF Ball Collisions with agent
+            self.BALL_SPEED_X *= -1
+        self.steps += 1
+        next_state = self.observe()
         return prev_state, action_index, next_state, reward
     
     def init_render(self):
