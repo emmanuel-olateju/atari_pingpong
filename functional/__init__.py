@@ -1,3 +1,3 @@
-from . import atari_environments
+from . import AQL
 
 __all__ = ['AQL']
